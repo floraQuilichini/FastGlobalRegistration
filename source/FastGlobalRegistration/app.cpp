@@ -127,7 +127,7 @@ void CApp::AdvancedMatching()
 	}
 
 	int nPti = pointcloud_[fi].size();
-	int nPtj = pointcloud_[fj].size();
+	int nPtj = pointcloud_[fj].size(); // we have nPtj < nPtj
 
 	///////////////////////////
 	/// BUILD FLANNTREE
@@ -158,31 +158,39 @@ void CApp::AdvancedMatching()
 	std::vector<int> i_to_j(nPti, -1);
 	for (int j = 0; j < nPtj; j++)
 	{
+		// search for the jth element of fj-feature array (features_[fj][j]) matching among fi-feature array (feature_tree_i)
+		// matching index in fi-feature array is stored in corres_K
+		// dis is the resulting distance (L2 (see l 46 in app.h)) value between jth and ith feature (resp from fj-feature array and fi-feature array)
 		SearchKDTree(&feature_tree_i, features_[fj][j], corres_K, dis, 1);
-		int i = corres_K[0];
-		if (i_to_j[i] == -1)
+		int i = corres_K[0]; // find index matching in fi-feature array for the jth element of fj-feature array
+
+		// this condition is a sort of reprocity operation : first we find the element in fi-feature array that matches a given element in fj-feature array
+		// and then for that same given element in fi-feature array, we find its matching element in fj-feature array
+		if (i_to_j[i] == -1) // i_to_j store matching in fj-feature array for the ith element of fi-feature array
+							 // the ith element is the one which matched the above j-feature
+						     // if the ith element already belongs to a ij pair, then the folowing code is not executed
 		{
 			SearchKDTree(&feature_tree_j, features_[fi][i], corres_K, dis, 1);
 			int ij = corres_K[0];
-			i_to_j[i] = ij;
+			i_to_j[i] = ij; // store index matching in fj-feature array for the ith element of fi-feature array
 		}
-		corres_ji.push_back(std::pair<int, int>(i, j));
+		corres_ji.push_back(std::pair<int, int>(i, j)); // corres_ji store j to i indexes matching pairs
 	}
 
 	for (int i = 0; i < nPti; i++)
 	{
-		if (i_to_j[i] != -1)
-			corres_ij.push_back(std::pair<int, int>(i, i_to_j[i]));
+		if (i_to_j[i] != -1) // take i-features in fi-feature array that have a matching in fj-feature array
+			corres_ij.push_back(std::pair<int, int>(i, i_to_j[i])); // corres_ij store i to j matching pairs
 	}
 
 	int ncorres_ij = corres_ij.size();
-	int ncorres_ji = corres_ji.size();
+	int ncorres_ji = corres_ji.size(); // we have corres_ij < corres_ji
 
 	// corres = corres_ij + corres_ji;
 	for (int i = 0; i < ncorres_ij; ++i)
-		corres.push_back(std::pair<int, int>(corres_ij[i].first, corres_ij[i].second));
+		corres.push_back(std::pair<int, int>(corres_ij[i].first, corres_ij[i].second)); // corres = corres_ij
 	for (int j = 0; j < ncorres_ji; ++j)
-		corres.push_back(std::pair<int, int>(corres_ji[j].first, corres_ji[j].second));
+		corres.push_back(std::pair<int, int>(corres_ji[j].first, corres_ji[j].second)); // corres += corres_ji
 
 	printf("Number of points that remain: %d\n", (int)corres.size());
 
@@ -190,13 +198,14 @@ void CApp::AdvancedMatching()
 	/// CROSS CHECK
 	/// input : corres_ij, corres_ji
 	/// output : corres
+	/// only keep ij pairs that equal ji pairs
 	///////////////////////////
 	if (crosscheck)
 	{
 		printf("\t[cross check] ");
 
 		// build data structure for cross check
-		corres.clear();
+		corres.clear(); // clear corres vector
 		corres_cross.clear();
 		std::vector<std::vector<int> > Mi(nPti);
 		std::vector<std::vector<int> > Mj(nPtj);
@@ -206,13 +215,13 @@ void CApp::AdvancedMatching()
 		{
 			ci = corres_ij[i].first;
 			cj = corres_ij[i].second;
-			Mi[ci].push_back(cj);
+			Mi[ci].push_back(cj); // store jth-index at Mi ith-index
 		}
 		for (int j = 0; j < ncorres_ji; ++j)
 		{
 			ci = corres_ji[j].first;
 			cj = corres_ji[j].second;
-			Mj[cj].push_back(ci);
+			Mj[cj].push_back(ci); // store ith-index at Mj jth-index
 		}
 
 		// cross check
@@ -223,10 +232,10 @@ void CApp::AdvancedMatching()
 				int j = Mi[i][ii];
 				for (int jj = 0; jj < Mj[j].size(); ++jj)
 				{
-					if (Mj[j][jj] == i)
+					if (Mj[j][jj] == i) // if cross-checked
 					{
 						corres.push_back(std::pair<int, int>(i, j));
-						corres_cross.push_back(std::pair<int, int>(i, j));
+						corres_cross.push_back(std::pair<int, int>(i, j)); // store ij pair in corres_cross
 					}
 				}
 			}
@@ -272,7 +281,7 @@ void CApp::AdvancedMatching()
 			Eigen::Vector3f pti1 = pointcloud_[fi][idi1];
 			Eigen::Vector3f pti2 = pointcloud_[fi][idi2];
 
-			float li0 = (pti0 - pti1).norm();
+			float li0 = (pti0 - pti1).norm(); // compute point to point distance
 			float li1 = (pti1 - pti2).norm();
 			float li2 = (pti2 - pti0).norm();
 
@@ -281,21 +290,21 @@ void CApp::AdvancedMatching()
 			Eigen::Vector3f ptj1 = pointcloud_[fj][idj1];
 			Eigen::Vector3f ptj2 = pointcloud_[fj][idj2];
 
-			float lj0 = (ptj0 - ptj1).norm();
+			float lj0 = (ptj0 - ptj1).norm(); // compute point to point distance
 			float lj1 = (ptj1 - ptj2).norm();
 			float lj2 = (ptj2 - ptj0).norm();
 
 			if ((li0 * scale < lj0) && (lj0 < li0 / scale) &&
 				(li1 * scale < lj1) && (lj1 < li1 / scale) &&
-				(li2 * scale < lj2) && (lj2 < li2 / scale))
+				(li2 * scale < lj2) && (lj2 < li2 / scale)) // if distance between i-points are roughly the same as distance between j points
 			{
-				corres_tuple.push_back(std::pair<int, int>(idi0, idj0));
+				corres_tuple.push_back(std::pair<int, int>(idi0, idj0)); // keep these three points to compute T
 				corres_tuple.push_back(std::pair<int, int>(idi1, idj1));
 				corres_tuple.push_back(std::pair<int, int>(idi2, idj2));
 				cnt++;
 			}
 
-			if (cnt >= tuple_max_cnt_)
+			if (cnt >= tuple_max_cnt_)  // we have at max tuple_max_cnt_*3 pairs of points to estimate T
 				break;
 		}
 
@@ -343,11 +352,11 @@ void CApp::NormalizePoints()
 			mean = mean + p;
 		}
 		mean = mean / npti;
-		Means.push_back(mean);
+		Means.push_back(mean); // compute the mean point of point cloud for each of the two point clouds
 
 		printf("normalize points :: mean[%d] = [%f %f %f]\n", i, mean(0), mean(1), mean(2));
 
-		for (int ii = 0; ii < npti; ++ii)
+		for (int ii = 0; ii < npti; ++ii) // center each of the two point clouds
 		{
 			pointcloud_[i][ii](0) -= mean(0);
 			pointcloud_[i][ii](1) -= mean(1);
@@ -363,7 +372,7 @@ void CApp::NormalizePoints()
 				max_scale = temp;
 		}
 
-		if (max_scale > scale)
+		if (max_scale > scale) // compute max point distance from origin (scale) between the two point clouds
 			scale = max_scale;
 	}
 
@@ -377,7 +386,7 @@ void CApp::NormalizePoints()
 	}
 	printf("normalize points :: global scale : %f\n", GlobalScale);
 
-	for (int i = 0; i < num; ++i)
+	for (int i = 0; i < num; ++i) // points of both of the point clouds are normalized
 	{
 		int npti = pointcloud_[i].size();
 		for (int ii = 0; ii < npti; ++ii)
