@@ -59,11 +59,12 @@ public:
 		max_corr_dist_(max_corr_dist),
 		iteration_number_(iteration_number),
 		tuple_scale_(tuple_scale),
-		tuple_max_cnt_(tuple_max_cnt){}
+		tuple_max_cnt_(tuple_max_cnt),
+		initialmatching_(true){}
 	void LoadFeature(const Points& pts, const Feature& feat);
-	void ReadFeature(const char* filepath);
+	void ReadFeature(const char* filepath, bool target = false, bool initialmatching = true);
 	void NormalizePoints();
-	void AdvancedMatching();
+	void AdvancedMatching(bool crosscheck);
 	Eigen::Matrix4f ReadTrans(const char* filepath);
 	void WriteTrans(const char* filepath);
 	Eigen::Matrix4f GetOutputTrans();
@@ -76,6 +77,8 @@ private:
 	std::vector<Feature> features_;
 	Eigen::Matrix4f TransOutput_;
 	std::vector<std::pair<int, int> > corres_;
+	std::vector<std::pair<int, int> > corres_ij_;
+	std::vector<std::pair<int, int> > corres_ji_;
 
 	// for normalization
 	Points Means;
@@ -83,7 +86,7 @@ private:
 	float StartScale = 1.0f;
 
 	// some internal functions
-	void ReadFeature(const char* filepath, Points& pts, Feature& feat);
+	void ReadFeature(const char* filepath, Points& pts, Feature& feat, bool target = false, bool indexmatching = true);
 	void TransformPoints(Points& points, const Eigen::Matrix4f& Trans);
 	void BuildDenseCorrespondence(const Eigen::Matrix4f& gth, 
 			Correspondences& corres);
@@ -103,6 +106,7 @@ private:
 	int    iteration_number_;
 	float  tuple_scale_;
 	int    tuple_max_cnt_;
+	bool   initialmatching_;
 };
 
 }

@@ -31,18 +31,20 @@
 
 int main(int argc, char *argv[])
 {
-	if (argc != 4)
+	if (argc != 6)
 	{
         printf("Usage ::\n");
-		printf("%s [feature_01] [feature_02] [transform_output_txt]\n", argv[0]);
+		printf("%s [feature_01] [feature_02] [transform_output_txt] [do_initial_matching] [do_cross_check]\n", argv[0]);
 		return 0;
 	}
+	bool initial_matching = (argv[4] == "true") || (argv[4] == "True");
+	bool cross_check = (argv[5] == "true") || (argv[5] == "True");
 	fgr::CApp app;
-	app.ReadFeature(argv[1]);
-	app.ReadFeature(argv[2]);
+	app.ReadFeature(argv[1], false, initial_matching); // source fpfh
+	app.ReadFeature(argv[2], true, initial_matching); // target fpfh
 	app.NormalizePoints();
-	app.AdvancedMatching();
-	app.OptimizePairwise(true);
+	app.AdvancedMatching(cross_check);
+	app.OptimizePairwise(cross_check);
 	app.WriteTrans(argv[3]);
 
 	return 0;

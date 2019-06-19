@@ -33,11 +33,11 @@ using namespace Eigen;
 using namespace std;
 using namespace fgr;
 
-void CApp::ReadFeature(const char* filepath)
+void CApp::ReadFeature(const char* filepath, bool target, bool initialmatching)
 {
 	Points pts;
 	Feature feat;
-	ReadFeature(filepath, pts, feat);
+	ReadFeature(filepath, pts, feat, target, initialmatching);
 	LoadFeature(pts,feat);
 }
 
@@ -47,7 +47,7 @@ void CApp::LoadFeature(const Points& pts, const Feature& feat)
 	features_.push_back(feat);
 }
 
-void CApp::ReadFeature(const char* filepath, Points& pts, Feature& feat)
+void CApp::ReadFeature(const char* filepath, Points& pts, Feature& feat, bool target, bool initialmatching)
 {
 	printf("ReadFeature ... ");
 	FILE* fid = fopen(filepath, "rb");
@@ -68,6 +68,39 @@ void CApp::ReadFeature(const char* filepath, Points& pts, Feature& feat)
 		pts.push_back(pts_v);
 		feat.push_back(feat_v);
 	}
+
+	// read source and target index matching
+	initialmatching_ = initialmatching;
+
+	if (!initialmatching)
+	{
+		int npair;
+		fread(&npair, sizeof(unsigned int), 1, fid);
+		std::cout << "nb pairs : " << npair << std::endl;
+		std::cout << "size int : " << sizeof(unsigned int) << std::endl;
+		if (target)
+		{
+			for (int pair_index = 0; pair_index < npair; pair_index++)
+			{
+				Vector2i ji;
+				fread(&ji(0), sizeof(unsigned int), 2, fid);
+				corres_ji_.push_back(std::make_pair(ji(0), ji(1)));
+				std::cout << "target index : " << ji(0) << " , source index : " << ji(1) << std::endl;
+			}
+		}
+		else
+		{
+			for (int pair_index = 0; pair_index < npair; pair_index++)
+			{
+				Vector2i ij;
+				fread(&ij(0), sizeof(unsigned int), 2, fid);
+				corres_ij_.push_back(std::make_pair(ij(0), ij(1)));
+				std::cout << "source index : " << ij(0) << " , target index : " << ij(1) << std::endl;
+			}
+		}
+	
+	}
+
 	fclose(fid);
 	printf("%d points with %d feature dimensions.\n", nvertex, ndim);
 }
@@ -110,7 +143,7 @@ void CApp::SearchKDTree(KDTree* tree, const T& input,
 	tree->knnSearch(query_mat, indices_mat, dists_mat, nn, flann::SearchParams(128));
 }
 
-void CApp::AdvancedMatching()
+void CApp::AdvancedMatching(bool crosscheck)
 {
 	int fi = 0;
 	int fj = 1;
@@ -129,17 +162,10 @@ void CApp::AdvancedMatching()
 	int nPti = pointcloud_[fi].size();
 	int nPtj = pointcloud_[fj].size(); // we have nPtj < nPtj
 
+
 	///////////////////////////
-	/// BUILD FLANNTREE
+	/// MATCHING
 	///////////////////////////
-
-	KDTree feature_tree_i(flann::KDTreeSingleIndexParams(15));
-	BuildKDTree(features_[fi], &feature_tree_i);
-
-	KDTree feature_tree_j(flann::KDTreeSingleIndexParams(15));
-	BuildKDTree(features_[fj], &feature_tree_j);
-
-	bool crosscheck = true;
 	bool tuple = true;
 
 	std::vector<int> corres_K, corres_K2;
@@ -148,52 +174,64 @@ void CApp::AdvancedMatching()
 
 	std::vector<std::pair<int, int> > corres;
 	std::vector<std::pair<int, int> > corres_cross;
-	std::vector<std::pair<int, int> > corres_ij;
-	std::vector<std::pair<int, int> > corres_ji;
 
-	///////////////////////////
-	/// INITIAL MATCHING
-	///////////////////////////
 
-	std::vector<int> i_to_j(nPti, -1);
-	for (int j = 0; j < nPtj; j++)
+	if (initialmatching_)
 	{
-		// search for the jth element of fj-feature array (features_[fj][j]) matching among fi-feature array (feature_tree_i)
-		// matching index in fi-feature array is stored in corres_K
-		// dis is the resulting distance (L2 (see l 46 in app.h)) value between jth and ith feature (resp from fj-feature array and fi-feature array)
-		SearchKDTree(&feature_tree_i, features_[fj][j], corres_K, dis, 1);
-		int i = corres_K[0]; // find index matching in fi-feature array for the jth element of fj-feature array
+		///////////////////////////
+		/// BUILD FLANNTREE
+		///////////////////////////
 
-		// this condition is a sort of reprocity operation : first we find the element in fi-feature array that matches a given element in fj-feature array
-		// and then for that same given element in fi-feature array, we find its matching element in fj-feature array
-		if (i_to_j[i] == -1) // i_to_j store matching in fj-feature array for the ith element of fi-feature array
-							 // the ith element is the one which matched the above j-feature
-						     // if the ith element already belongs to a ij pair, then the folowing code is not executed
+		KDTree feature_tree_i(flann::KDTreeSingleIndexParams(15));
+		BuildKDTree(features_[fi], &feature_tree_i);
+
+		KDTree feature_tree_j(flann::KDTreeSingleIndexParams(15));
+		BuildKDTree(features_[fj], &feature_tree_j);
+
+		///////////////////////////
+		/// INITIAL MATCHING
+		///////////////////////////
+
+		std::vector<int> i_to_j(nPti, -1);
+		for (int j = 0; j < nPtj; j++)
 		{
-			SearchKDTree(&feature_tree_j, features_[fi][i], corres_K, dis, 1);
-			int ij = corres_K[0];
-			i_to_j[i] = ij; // store index matching in fj-feature array for the ith element of fi-feature array
+			// search for the jth element of fj-feature array (features_[fj][j]) matching among fi-feature array (feature_tree_i)
+			// matching index in fi-feature array is stored in corres_K
+			// dis is the resulting distance (L2 (see l 46 in app.h)) value between jth and ith feature (resp from fj-feature array and fi-feature array)
+			SearchKDTree(&feature_tree_i, features_[fj][j], corres_K, dis, 1);
+			int i = corres_K[0]; // find index matching in fi-feature array for the jth element of fj-feature array
+
+			// this condition is a sort of reprocity operation : first we find the element in fi-feature array that matches a given element in fj-feature array
+			// and then for that same given element in fi-feature array, we find its matching element in fj-feature array
+			if (i_to_j[i] == -1) // i_to_j store matching in fj-feature array for the ith element of fi-feature array
+								 // the ith element is the one which matched the above j-feature
+								 // if the ith element already belongs to a ij pair, then the folowing code is not executed
+			{
+				SearchKDTree(&feature_tree_j, features_[fi][i], corres_K, dis, 1);
+				int ij = corres_K[0];
+				i_to_j[i] = ij; // store index matching in fj-feature array for the ith element of fi-feature array
+			}
+			corres_ji_.push_back(std::pair<int, int>(i, j)); // corres_ji store j to i indexes matching pairs
 		}
-		corres_ji.push_back(std::pair<int, int>(i, j)); // corres_ji store j to i indexes matching pairs
+
+		for (int i = 0; i < nPti; i++)
+		{
+			if (i_to_j[i] != -1) // take i-features in fi-feature array that have a matching in fj-feature array
+				corres_ij_.push_back(std::pair<int, int>(i, i_to_j[i])); // corres_ij store i to j matching pairs
+		}
+
+		int ncorres_ij = corres_ij_.size();
+		int ncorres_ji_ = corres_ji_.size(); // we have corres_ij < corres_ji
+
+		// corres = corres_ij + corres_ji;
+		for (int i = 0; i < ncorres_ij; ++i)
+			corres.push_back(std::pair<int, int>(corres_ij_[i].first, corres_ij_[i].second)); // corres = corres_ij
+		for (int j = 0; j < ncorres_ji_; ++j)
+			corres.push_back(std::pair<int, int>(corres_ji_[j].first, corres_ji_[j].second)); // corres += corres_ji
+
+		printf("Number of points that remain: %d\n", (int)corres.size());
 	}
-
-	for (int i = 0; i < nPti; i++)
-	{
-		if (i_to_j[i] != -1) // take i-features in fi-feature array that have a matching in fj-feature array
-			corres_ij.push_back(std::pair<int, int>(i, i_to_j[i])); // corres_ij store i to j matching pairs
-	}
-
-	int ncorres_ij = corres_ij.size();
-	int ncorres_ji = corres_ji.size(); // we have corres_ij < corres_ji
-
-	// corres = corres_ij + corres_ji;
-	for (int i = 0; i < ncorres_ij; ++i)
-		corres.push_back(std::pair<int, int>(corres_ij[i].first, corres_ij[i].second)); // corres = corres_ij
-	for (int j = 0; j < ncorres_ji; ++j)
-		corres.push_back(std::pair<int, int>(corres_ji[j].first, corres_ji[j].second)); // corres += corres_ji
-
-	printf("Number of points that remain: %d\n", (int)corres.size());
-
+	
 	///////////////////////////
 	/// CROSS CHECK
 	/// input : corres_ij, corres_ji
@@ -210,17 +248,19 @@ void CApp::AdvancedMatching()
 		std::vector<std::vector<int> > Mi(nPti);
 		std::vector<std::vector<int> > Mj(nPtj);
 
+		int ncorres_ij = corres_ij_.size();
+		int ncorres_ji = corres_ji_.size();
 		int ci, cj;
 		for (int i = 0; i < ncorres_ij; ++i)
 		{
-			ci = corres_ij[i].first;
-			cj = corres_ij[i].second;
+			ci = corres_ij_[i].first;
+			cj = corres_ij_[i].second;
 			Mi[ci].push_back(cj); // store jth-index at Mi ith-index
 		}
 		for (int j = 0; j < ncorres_ji; ++j)
 		{
-			ci = corres_ji[j].first;
-			cj = corres_ji[j].second;
+			ci = corres_ji_[j].first;
+			cj = corres_ji_[j].second;
 			Mj[cj].push_back(ci); // store ith-index at Mj jth-index
 		}
 
