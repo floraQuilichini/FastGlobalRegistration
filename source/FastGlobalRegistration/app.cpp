@@ -282,6 +282,11 @@ void CApp::AdvancedMatching(bool crosscheck)
 		}
 		printf("Number of points that remain after cross-check: %d\n", (int)corres.size());
 	}
+	else
+	{
+		corres = corres_ij_;
+		printf("Number of points that remain after cross-check: %d\n", (int)corres.size());
+	}
 
 	///////////////////////////
 	/// TUPLE CONSTRAINT
