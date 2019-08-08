@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
 	app.ReadFeature(argv[2], true, initial_matching); // target fpfh
 	app.NormalizePoints();
 	app.AdvancedMatching(cross_check);
-	app.OptimizePairwise(cross_check);
+	app.OptimizePairwise(true);
 	app.WriteTrans(argv[3]);
 
 

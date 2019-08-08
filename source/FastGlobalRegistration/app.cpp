@@ -82,10 +82,10 @@ void CApp::ReadFeature(const char* filepath, Points& pts, Feature& feat, bool ta
 		{
 			for (int pair_index = 0; pair_index < npair; pair_index++)
 			{
-				Vector2i ji;
-				fread(&ji(0), sizeof(unsigned int), 2, fid);
-				corres_ji_.push_back(std::make_pair(ji(0), ji(1)));
-				std::cout << "target index : " << ji(0) << " , source index : " << ji(1) << std::endl;
+				Vector2i ij;
+				fread(&ij(0), sizeof(unsigned int), 2, fid);
+				corres_ji_.push_back(std::make_pair(ij(0), ij(1)));  //contains correspondence pairs from i to j
+				std::cout << "source index : " << ij(0) << " , target index : " << ij(1) << std::endl;
 			}
 		}
 		else
@@ -94,7 +94,7 @@ void CApp::ReadFeature(const char* filepath, Points& pts, Feature& feat, bool ta
 			{
 				Vector2i ij;
 				fread(&ij(0), sizeof(unsigned int), 2, fid);
-				corres_ij_.push_back(std::make_pair(ij(0), ij(1)));
+				corres_ij_.push_back(std::make_pair(ij(0), ij(1)));    //contains correspondence pairs from j to i
 				std::cout << "source index : " << ij(0) << " , target index : " << ij(1) << std::endl;
 			}
 		}
@@ -211,13 +211,13 @@ void CApp::AdvancedMatching(bool crosscheck)
 				int ij = corres_K[0];
 				i_to_j[i] = ij; // store index matching in fj-feature array for the ith element of fi-feature array
 			}
-			corres_ji_.push_back(std::pair<int, int>(i, j)); // corres_ji store j to i indexes matching pairs
+			corres_ji_.push_back(std::pair<int, int>(i, j)); // corres_ji store matching pairs indexes from features_i to features_j
 		}
 
 		for (int i = 0; i < nPti; i++)
 		{
 			if (i_to_j[i] != -1) // take i-features in fi-feature array that have a matching in fj-feature array
-				corres_ij_.push_back(std::pair<int, int>(i, i_to_j[i])); // corres_ij store i to j matching pairs
+				corres_ij_.push_back(std::pair<int, int>(i, i_to_j[i])); // corres_ij store matching pairs indexes from features_j to features_i
 		}
 
 		int ncorres_ij = corres_ij_.size();
@@ -255,13 +255,13 @@ void CApp::AdvancedMatching(bool crosscheck)
 		{
 			ci = corres_ij_[i].first;
 			cj = corres_ij_[i].second;
-			Mi[ci].push_back(cj); // store jth-index at Mi ith-index
+			Mi[ci].push_back(cj); // store jth-index at Mi ith-index --> vector sorted along i indexes 
 		}
 		for (int j = 0; j < ncorres_ji; ++j)
 		{
 			ci = corres_ji_[j].first;
 			cj = corres_ji_[j].second;
-			Mj[cj].push_back(ci); // store ith-index at Mj jth-index
+			Mj[cj].push_back(ci); // store ith-index at Mj jth-index --> vector sorted along j indexes
 		}
 
 		// cross check
@@ -275,6 +275,7 @@ void CApp::AdvancedMatching(bool crosscheck)
 					if (Mj[j][jj] == i) // if cross-checked
 					{
 						corres.push_back(std::pair<int, int>(i, j));
+						printf("i-j pairs: %d %d\n", i, j);
 						corres_cross.push_back(std::pair<int, int>(i, j)); // store ij pair in corres_cross
 					}
 				}
