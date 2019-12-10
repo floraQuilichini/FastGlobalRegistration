@@ -77,7 +77,7 @@ void CApp::ReadFeature(const char* filepath, Points& pts, Feature& feat, bool ta
 		int npair;
 		fread(&npair, sizeof(unsigned int), 1, fid);
 		std::cout << "nb pairs : " << npair << std::endl;
-		std::cout << "size int : " << sizeof(unsigned int) << std::endl;
+		//std::cout << "size int : " << sizeof(unsigned int) << std::endl;
 		if (target)
 		{
 			for (int pair_index = 0; pair_index < npair; pair_index++)
@@ -85,7 +85,7 @@ void CApp::ReadFeature(const char* filepath, Points& pts, Feature& feat, bool ta
 				Vector2i ij;
 				fread(&ij(0), sizeof(unsigned int), 2, fid);
 				corres_ji_.push_back(std::make_pair(ij(0), ij(1)));  //contains correspondence pairs from i to j
-				std::cout << "source index : " << ij(0) << " , target index : " << ij(1) << std::endl;
+				//std::cout << "source index : " << ij(0) << " , target index : " << ij(1) << std::endl;
 			}
 		}
 		else
@@ -149,14 +149,18 @@ void CApp::AdvancedMatching(bool crosscheck)
 	int fj = 1;
 
 	printf("Advanced matching : [%d - %d]\n", fi, fj);
-	bool swapped = false;
 
-	if (pointcloud_[fj].size() > pointcloud_[fi].size())
+	
+	bool swapped = false;
+	if (initialmatching_)
 	{
-		int temp = fi;
-		fi = fj;
-		fj = temp;
-		swapped = true;
+		if (pointcloud_[fj].size() > pointcloud_[fi].size())
+		{
+			int temp = fi;
+			fi = fj;
+			fj = temp;
+			swapped = true;
+		}
 	}
 
 	int nPti = pointcloud_[fi].size();
@@ -195,7 +199,7 @@ void CApp::AdvancedMatching(bool crosscheck)
 		std::vector<int> i_to_j(nPti, -1);
 		for (int j = 0; j < nPtj; j++)
 		{
-			// search for the jth element of fj-feature array (features_[fj][j]) matching among fi-feature array (feature_tree_i)
+			// search among fi-feature array (feature_tree_i) the element that matches with the jth element of fj-feature array (features_[fj][j])
 			// matching index in fi-feature array is stored in corres_K
 			// dis is the resulting distance (L2 (see l 46 in app.h)) value between jth and ith feature (resp from fj-feature array and fi-feature array)
 			SearchKDTree(&feature_tree_i, features_[fj][j], corres_K, dis, 1);
@@ -221,7 +225,7 @@ void CApp::AdvancedMatching(bool crosscheck)
 		}
 
 		int ncorres_ij = corres_ij_.size();
-		int ncorres_ji_ = corres_ji_.size(); // we have corres_ij < corres_ji
+		int ncorres_ji_ = corres_ji_.size(); // we have corres_ij < or = corres_ji
 
 		// corres = corres_ij + corres_ji;
 		for (int i = 0; i < ncorres_ij; ++i)
