@@ -33,12 +33,131 @@ using namespace Eigen;
 using namespace std;
 using namespace fgr;
 
+std::string CApp::extract_ext(std::string filename)
+{
+	size_t i = filename.rfind('.', filename.length());
+	if (i != std::string::npos) {
+		return(filename.substr(i + 1, filename.length() - i));
+	}
+
+	return("");
+}
+
+float CApp::Median(std::vector<float>::iterator begin, std::vector<float>::iterator end)
+{
+	std::multiset<float> set;
+	for (auto it = begin; it!=end; it++)
+		set.insert(*it);
+	
+	return *std::next(set.begin(), set.size() / 2);
+}
+
+std::tuple<float, float, float, std::vector<int>> CApp::compute_histogram(std::vector<float>& vec)
+{
+	std::vector<float>::iterator min_it = std::min_element(vec.begin(), vec.end());
+	std::vector<float>::iterator max_it = std::max_element(vec.begin(), vec.end());
+	float step = 0.1;
+	float min_abs = std::round(*min_it / step)*step;
+	float max_abs = std::round(*max_it / step)*step;
+	std::vector<int> occurences((int)((max_abs - min_abs) / step)+1);
+
+	for (int j = 0; j < vec.size(); j++)
+		occurences[(int)(round(vec[j] / step) - min_abs / step)] += 1;
+	
+	return std::make_tuple(min_abs, max_abs, step, occurences);
+}
+
 void CApp::ReadFeature(const char* filepath, bool target, bool initialmatching)
 {
 	Points pts;
 	Feature feat;
 	ReadFeature(filepath, pts, feat, target, initialmatching);
 	LoadFeature(pts,feat);
+}
+
+bool CApp::ReadPointCloud(const char* filepath)
+{
+	Points pts;
+	std::string file_ext = extract_ext(filepath);
+	if (file_ext.compare("ply") == 0)
+	{
+		// read ply file and go to the section where faces are listed
+		FILE* fid = fopen(filepath, "r"); // not binary file
+		char string_header[50];
+
+		if (fid == NULL)
+		{
+			std::cerr << "can't open file" << std::endl;
+			return false;
+		}
+		
+		// find number of vertices
+		int nvertex = 0;
+
+		while (fgets(string_header, 50, fid) != NULL) {
+			std::string s(string_header);
+			std::cout << s << std::endl;
+			if (s.find("element vertex") != std::string::npos)
+				nvertex = std::atoi((s.erase(0, 15)).c_str());
+			if (s.find("end_header") != std::string::npos)
+				break;
+		} ;
+
+		// get points
+		for (int v = 0; v < nvertex; v++) {
+
+			Vector3f pts_v;
+			float pts_x_v, pts_y_v, pts_z_v, normals_x_v, normals_y_v, normals_z_v;
+			fscanf(fid, "%f", &pts_x_v);
+			fscanf(fid, "%f", &pts_y_v);
+			fscanf(fid, "%f", &pts_z_v);
+			fscanf(fid, "%f", &normals_x_v);
+			fscanf(fid, "%f", &normals_y_v);
+			fscanf(fid, "%f", &normals_z_v);
+			pts_v << pts_x_v, pts_y_v, pts_z_v;
+
+			pts.push_back(pts_v);
+		}
+
+		// load points 
+		pointcloud_.push_back(pts);
+
+		fclose(fid);
+		return true;
+	}
+
+	else
+	{
+		// not implemented yet for other types of files
+		return false;
+	}
+}
+
+void CApp::ReadTriplets(const char* filepath)
+{
+	// read ply file and go to the section where faces are listed
+	FILE* fid = fopen(filepath, "r"); // not binary file
+
+	if (fid == NULL)
+		std::cerr << "can't open file" << std::endl;
+
+	// get nb triplet
+	int nb_triplets;
+	fscanf(fid, "%d", &nb_triplets);
+	// get points
+	for (int v = 0; v < nb_triplets*3; v++) {
+
+		int target_index, source_index;
+		float scale;
+		fscanf(fid, "%d", &target_index);
+		fscanf(fid, "%d", &source_index);
+		fscanf(fid, "%f", &scale);
+
+		triplets_pairs_.push_back(std::make_tuple(target_index, source_index, scale));
+	}
+
+	fclose(fid);
+	
 }
 
 void CApp::LoadFeature(const Points& pts, const Feature& feat)
@@ -271,10 +390,10 @@ void CApp::AdvancedMatching(bool crosscheck)
 		// cross check
 		for (int i = 0; i < nPti; ++i)
 		{
-			for (int ii = 0; ii < Mi[i].size(); ++ii)
+			for (int ii = 0; ii < (int)Mi[i].size(); ++ii)
 			{
 				int j = Mi[i][ii];
-				for (int jj = 0; jj < Mj[j].size(); ++jj)
+				for (int jj = 0; jj < (int)Mj[j].size(); ++jj)
 				{
 					if (Mj[j][jj] == i) // if cross-checked
 					{
@@ -361,14 +480,14 @@ void CApp::AdvancedMatching(bool crosscheck)
 		printf("%d tuples (%d trial, %d actual).\n", cnt, number_of_trial, i);
 		corres.clear();
 
-		for (int i = 0; i < corres_tuple.size(); ++i)
+		for (int i = 0; i < (int)corres_tuple.size(); ++i)
 			corres.push_back(std::pair<int, int>(corres_tuple[i].first, corres_tuple[i].second));
 	}
 
 	if (swapped)
 	{
 		std::vector<std::pair<int, int> > temp;
-		for (int i = 0; i < corres.size(); i++)
+		for (int i = 0; i < (int)corres.size(); i++)
 			temp.push_back(std::pair<int, int>(corres[i].second, corres[i].first));
 		corres.clear();
 		corres = temp;
@@ -376,6 +495,78 @@ void CApp::AdvancedMatching(bool crosscheck)
 
 	printf("\t[final] matches %d.\n", (int)corres.size());
 	corres_ = corres;
+}
+
+void CApp::TripletConstraint()
+{
+	float scale_ratio = tuple_scale_;
+	std::vector<float> scale_coeff_vec;
+	std::vector<std::tuple<int, int, float> > corres_tuple;
+	int i0, i1, i2, j0, j1, j2;
+	int cnt = 0;
+	int nb_triplets = (int)triplets_pairs_.size() / 3;
+	for (int i = 0; i < nb_triplets; i++)
+	{
+		// get scale source/target
+		float scale_coeff  = std::get<2>(triplets_pairs_[3 * i]);
+
+		// get source and target indices
+		j0 = std::get<0>(triplets_pairs_[3*i]);
+		i0 = std::get<1>(triplets_pairs_[3*i]);
+		j1 = std::get<0>(triplets_pairs_[3*i+1]);
+		i1 = std::get<1>(triplets_pairs_[3*i+1]);
+		j2 = std::get<0>(triplets_pairs_[3*i+2]);
+		i2 = std::get<1>(triplets_pairs_[3*i+2]);
+
+		// collect triplet of points from source fragment
+		Eigen::Vector3f pti0 = pointcloud_[0][i0];
+		Eigen::Vector3f pti1 = pointcloud_[0][i1];
+		Eigen::Vector3f pti2 = pointcloud_[0][i2];
+
+		float li0 = (pti0 - pti1).norm(); // compute point to point distance
+		float li1 = (pti1 - pti2).norm();
+		float li2 = (pti2 - pti0).norm();
+
+		// collect triplet of points from target fragment
+		Eigen::Vector3f ptj0 = pointcloud_[1][j0];
+		Eigen::Vector3f ptj1 = pointcloud_[1][j1];
+		Eigen::Vector3f ptj2 = pointcloud_[1][j2];
+
+		float lj0 = scale_coeff*(ptj0 - ptj1).norm(); // compute point to point distance
+		float lj1 = scale_coeff*(ptj1 - ptj2).norm();
+		float lj2 = scale_coeff*(ptj2 - ptj0).norm();
+
+		if ((li0 * scale_ratio < lj0) && (lj0 < li0 / scale_ratio) &&
+			(li1 * scale_ratio < lj1) && (lj1 < li1 / scale_ratio) &&
+			(li2 * scale_ratio < lj2) && (lj2 < li2 / scale_ratio)) // if distance between i-points are roughly the same as distance between j points
+		{
+			corres_tuple.push_back(std::tuple<int, int, float>(i0, j0, scale_coeff)); // keep these three points to compute T
+			corres_tuple.push_back(std::tuple<int, int, float>(i1, j1, scale_coeff));
+			corres_tuple.push_back(std::tuple<int, int, float>(i2, j2, scale_coeff));
+
+			scale_coeff_vec.push_back(scale_coeff);
+			cnt++;
+		}
+
+		if (cnt >= tuple_max_cnt_)  // we have at max tuple_max_cnt_*3 pairs of points to estimate T
+			break;
+	}
+
+	std::tuple<float, float, float, std::vector<int>> hist = compute_histogram(scale_coeff_vec);
+	std::vector<int>& occurences = std::get<3>(hist);
+	float min_abs = std::get<0>(hist);
+	float step = std::get<2>(hist);
+	optimal_scale_coeff_ = std::distance(occurences.begin(), std::max_element(occurences.begin(), occurences.end()))*step + min_abs;
+	//optimal_scale_coeff_ = Median(scale_coeff_vec.begin(), scale_coeff_vec.end());
+
+	corres_.clear();
+	for (int i = 0; i < (int)corres_tuple.size(); ++i)
+	{
+		float scale_coeff = std::get<2>(corres_tuple[i]);
+		if ( abs(scale_coeff - optimal_scale_coeff_) <= 0.1)
+			corres_.push_back(std::pair<int, int>(std::get<0>(corres_tuple[i]), std::get<1>(corres_tuple[i])));
+	}
+
 }
 
 // Normalize scale of points.
@@ -461,9 +652,13 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 	int i = 0;
 	int j = 1;
 
+	// resize pointcloud_[j] (target point cloud)
+	int npcj = pointcloud_[j].size();
+	for (int cnt = 0; cnt < npcj; cnt++)
+		pointcloud_[j][cnt] = optimal_scale_coeff_*pointcloud_[j][cnt];
+
 	// make another copy of pointcloud_[j].
 	Points pcj_copy;
-	int npcj = pointcloud_[j].size();
 	pcj_copy.resize(npcj);
 	for (int cnt = 0; cnt < npcj; cnt++)
 		pcj_copy[cnt] = pointcloud_[j][cnt];
@@ -496,7 +691,7 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 		double r;
 		double r2 = 0.0;
 
-		for (int c = 0; c < corres_.size(); c++) {
+		for (int c = 0; c < (int)corres_.size(); c++) {
 			int ii = corres_[c].first;
 			int jj = corres_[c].second;
 			Eigen::Vector3f p, q;
@@ -575,7 +770,7 @@ Eigen::Matrix4f CApp::GetOutputTrans()
 {
 	Eigen::Matrix3f R;
 	Eigen::Vector3f t;
-	R = TransOutput_.block<3, 3>(0, 0);
+	R = TransOutput_.block<3, 3>(0, 0)*(optimal_scale_coeff_*Eigen::Matrix3f::Identity());
 	t = TransOutput_.block<3, 1>(0, 3);
 
 	Eigen::Matrix4f transtemp;
@@ -642,7 +837,7 @@ void CApp::BuildDenseCorrespondence(const Eigen::Matrix4f& trans,
 	std::vector<int> ind;
 	std::vector<float> dist;
 	corres.clear();
-	for (int j = 0; j < pcj.size(); ++j)
+	for (int j = 0; j < (int)pcj.size(); ++j)
 	{
 		SearchKDTree(&feature_tree_i, pcj[j], ind, dist, 1);
 		float dist_j = sqrt(dist[0]);

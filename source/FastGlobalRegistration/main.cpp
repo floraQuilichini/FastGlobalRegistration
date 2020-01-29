@@ -31,6 +31,8 @@
 
 int main(int argc, char *argv[])
 {
+	/*
+	// with fpfh descriptors
 	printf("nb arg : %d \n", argc);
 	if (argc != 6)
 	{
@@ -47,8 +49,25 @@ int main(int argc, char *argv[])
 	app.AdvancedMatching(cross_check);
 	app.OptimizePairwise(true);
 	app.WriteTrans(argv[3]);
+	*/
 
+	// with GLS descriptors
+	printf("nb arg : %d \n", argc);
+	if (argc != 5)
+	{
+		printf("Usage ::\n");
+		printf("%s [source_point_cloud] [target_point_cloud] [triplet_pairs_file] [transform_output_txt]\n", argv[0]);
+		return 0;
+	}
 
+	fgr::CApp app;
+	app.ReadPointCloud(argv[1]); // source ply point cloud
+	app.ReadPointCloud(argv[2]); // target ply point cloud
+	app.ReadTriplets(argv[3]);
+	app.NormalizePoints();
+	app.TripletConstraint();
+	app.OptimizePairwise(true);
+	app.WriteTrans(argv[4]);
 
 	//std::cin.get();
 	return 0;

@@ -61,10 +61,16 @@ public:
 		tuple_scale_(tuple_scale),
 		tuple_max_cnt_(tuple_max_cnt),
 		initialmatching_(true){}
+	std::string extract_ext(std::string filename);
+	std::tuple<float, float, float, std::vector<int>> compute_histogram(std::vector<float>& vec);
+	float Median(std::vector<float>::iterator begin, std::vector<float>::iterator end);
 	void LoadFeature(const Points& pts, const Feature& feat);
 	void ReadFeature(const char* filepath, bool target = false, bool initialmatching = true);
+	bool ReadPointCloud(const char* filepath);
+	void ReadTriplets(const char* filepath);
 	void NormalizePoints();
 	void AdvancedMatching(bool crosscheck);
+	void TripletConstraint();
 	Eigen::Matrix4f ReadTrans(const char* filepath);
 	void WriteTrans(const char* filepath);
 	Eigen::Matrix4f GetOutputTrans();
@@ -107,6 +113,8 @@ private:
 	float  tuple_scale_;
 	int    tuple_max_cnt_;
 	bool   initialmatching_;
+	std::vector<std::tuple<int, int, float>> triplets_pairs_;
+	float optimal_scale_coeff_ = 1.0;
 };
 
 }
