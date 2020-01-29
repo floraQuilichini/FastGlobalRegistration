@@ -64,6 +64,7 @@ public:
 	std::string extract_ext(std::string filename);
 	std::tuple<float, float, float, std::vector<int>> compute_histogram(std::vector<float>& vec);
 	float Median(std::vector<float>::iterator begin, std::vector<float>::iterator end);
+	float Mean(std::vector<float>& vec);
 	void LoadFeature(const Points& pts, const Feature& feat);
 	void ReadFeature(const char* filepath, bool target = false, bool initialmatching = true);
 	bool ReadPointCloud(const char* filepath);

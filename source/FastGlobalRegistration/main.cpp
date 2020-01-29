@@ -27,6 +27,7 @@
 // IN THE SOFTWARE.
 // ----------------------------------------------------------------------------
 #include <stdio.h>
+#include <chrono>
 #include "app.h"
 
 int main(int argc, char *argv[])
@@ -65,10 +66,17 @@ int main(int argc, char *argv[])
 	app.ReadPointCloud(argv[2]); // target ply point cloud
 	app.ReadTriplets(argv[3]);
 	app.NormalizePoints();
+	std::chrono::high_resolution_clock::time_point t0 = std::chrono::high_resolution_clock::now();
 	app.TripletConstraint();
+	std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 	app.OptimizePairwise(true);
+	std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+	std::chrono::nanoseconds ns_fgr = std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t0);
+	std::cout << "It took " << ns_fgr.count() << " nanosecond(s) to run FGR" << std::endl;
+	std::chrono::nanoseconds ns_triplet = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0);
+	std::cout << "It took " << ns_triplet.count() << " nanosecond(s) to run triplet constraints" << std::endl;
 	app.WriteTrans(argv[4]);
 
-	//std::cin.get();
+	std::cin.get();
 	return 0;
 }

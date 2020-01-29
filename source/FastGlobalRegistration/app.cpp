@@ -52,6 +52,15 @@ float CApp::Median(std::vector<float>::iterator begin, std::vector<float>::itera
 	return *std::next(set.begin(), set.size() / 2);
 }
 
+float CApp::Mean(std::vector<float>& vec)
+{
+	float mean = 0.0;
+	for (int i = 0; i < (int)vec.size(); i++)
+		mean += vec[i];
+
+	return mean/(float)vec.size();
+}
+
 std::tuple<float, float, float, std::vector<int>> CApp::compute_histogram(std::vector<float>& vec)
 {
 	std::vector<float>::iterator min_it = std::min_element(vec.begin(), vec.end());
@@ -96,7 +105,6 @@ bool CApp::ReadPointCloud(const char* filepath)
 
 		while (fgets(string_header, 50, fid) != NULL) {
 			std::string s(string_header);
-			std::cout << s << std::endl;
 			if (s.find("element vertex") != std::string::npos)
 				nvertex = std::atoi((s.erase(0, 15)).c_str());
 			if (s.find("end_header") != std::string::npos)
@@ -558,12 +566,28 @@ void CApp::TripletConstraint()
 	float step = std::get<2>(hist);
 	optimal_scale_coeff_ = std::distance(occurences.begin(), std::max_element(occurences.begin(), occurences.end()))*step + min_abs;
 	//optimal_scale_coeff_ = Median(scale_coeff_vec.begin(), scale_coeff_vec.end());
+	//optimal_scale_coeff_ = Mean(scale_coeff_vec);
+
+	/*optimal_scale_coeff_ = 2.0;
+	corres_.clear();
+	corres_.push_back(std::make_pair(50, 50));
+	corres_.push_back(std::make_pair(40, 40));
+	corres_.push_back(std::make_pair(30, 30));
+	corres_.push_back(std::make_pair(20, 20));
+	corres_.push_back(std::make_pair(100, 100));
+	corres_.push_back(std::make_pair(21, 21));
+	corres_.push_back(std::make_pair(11, 11));
+	corres_.push_back(std::make_pair(67, 67));
+	corres_.push_back(std::make_pair(25, 25));
+	corres_.push_back(std::make_pair(36, 36));
+	corres_.push_back(std::make_pair(48, 48));
+	corres_.push_back(std::make_pair(75, 75));*/
 
 	corres_.clear();
 	for (int i = 0; i < (int)corres_tuple.size(); ++i)
 	{
 		float scale_coeff = std::get<2>(corres_tuple[i]);
-		if ( abs(scale_coeff - optimal_scale_coeff_) <= 0.1)
+		if ( abs(scale_coeff - optimal_scale_coeff_) <= 0.2)
 			corres_.push_back(std::pair<int, int>(std::get<0>(corres_tuple[i]), std::get<1>(corres_tuple[i])));
 	}
 
