@@ -36,7 +36,7 @@
 #define USE_ABSOLUTE_SCALE	0		// Measure distance in absolute scale (1) or in scale relative to the diameter of the model (0)
 #define MAX_CORR_DIST		0.025	// Maximum correspondence distance (also see comment of USE_ABSOLUTE_SCALE)
 #define ITERATION_NUMBER	64		// Maximum number of iteration
-#define TUPLE_SCALE			0.87	// Similarity measure used for tuples of feature points.
+#define TUPLE_SCALE			0.95	// Similarity measure used for tuples of feature points.
 #define TUPLE_MAX_CNT		1000	// Maximum tuple numbers.
 
 namespace fgr {
@@ -63,15 +63,21 @@ public:
 		initialmatching_(true){}
 	std::string extract_ext(std::string filename);
 	std::tuple<float, float, float, std::vector<int>> compute_histogram(std::vector<float>& vec);
+	float compute_scale(Eigen::Vector3f& pt1, Eigen::Vector3f& pt2, Eigen::Vector3f& pt3, Eigen::Vector3f& ps1, Eigen::Vector3f& ps2, Eigen::Vector3f& ps3);
 	float Median(std::vector<float>::iterator begin, std::vector<float>::iterator end);
 	float Mean(std::vector<float>& vec);
+	std::tuple<int, int, int> get_3_different_random_integers(int k);
+	int Factorial(int n);
+	int NumberOfCombinations(int n, int p);
 	void LoadFeature(const Points& pts, const Feature& feat);
 	void ReadFeature(const char* filepath, bool target = false, bool initialmatching = true);
 	bool ReadPointCloud(const char* filepath);
 	void ReadTriplets(const char* filepath);
+	int ReadPairs(const char* filepath);
 	void NormalizePoints();
 	void AdvancedMatching(bool crosscheck);
 	void TripletConstraint();
+	void PairsConstraint(int k);
 	Eigen::Matrix4f ReadTrans(const char* filepath);
 	void WriteTrans(const char* filepath);
 	Eigen::Matrix4f GetOutputTrans();
@@ -114,7 +120,7 @@ private:
 	float  tuple_scale_;
 	int    tuple_max_cnt_;
 	bool   initialmatching_;
-	std::vector<std::tuple<int, int, float>> triplets_pairs_;
+	std::vector<std::tuple<int, int, float>> pairs_;
 	float optimal_scale_coeff_ = 1.0;
 };
 

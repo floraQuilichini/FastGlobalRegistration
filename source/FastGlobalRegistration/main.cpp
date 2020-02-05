@@ -64,10 +64,12 @@ int main(int argc, char *argv[])
 	fgr::CApp app;
 	app.ReadPointCloud(argv[1]); // source ply point cloud
 	app.ReadPointCloud(argv[2]); // target ply point cloud
-	app.ReadTriplets(argv[3]);
+	//app.ReadTriplets(argv[3]);
+	app.ReadPairs(argv[3]);
 	app.NormalizePoints();
 	std::chrono::high_resolution_clock::time_point t0 = std::chrono::high_resolution_clock::now();
-	app.TripletConstraint();
+	//app.TripletConstraint();
+	app.PairsConstraint(12);
 	std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 	app.OptimizePairwise(true);
 	std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();

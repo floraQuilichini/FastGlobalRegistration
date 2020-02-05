@@ -61,6 +61,43 @@ float CApp::Mean(std::vector<float>& vec)
 	return mean/(float)vec.size();
 }
 
+int CApp::Factorial(int n)
+{
+	if (n > 1)
+		return n*Factorial(n - 1);
+	else
+		return 1;
+}
+
+int CApp::NumberOfCombinations(int n, int p)
+{
+	if (n < p)
+	{
+		int temp = n;
+		n = p;
+		p = temp;
+	}
+
+	int factorial_n = Factorial(n);
+	int factorial_p = Factorial(p);
+	int factorial_n_p = Factorial(n - p);
+
+	return factorial_n / (factorial_p*factorial_n_p);
+}
+
+std::tuple<int, int, int> CApp::get_3_different_random_integers(int k)
+{
+	int rand0 = rand() % k;
+	int rand1 = rand() % k;
+	int rand2 = rand() % k;
+	while (rand1 == rand0)
+		rand1 = rand() % k;
+	while (rand2 == rand0 || rand2 == rand1)
+		rand2 = rand() % k;
+
+	return std::make_tuple(rand0, rand1, rand2);
+}
+
 std::tuple<float, float, float, std::vector<int>> CApp::compute_histogram(std::vector<float>& vec)
 {
 	std::vector<float>::iterator min_it = std::min_element(vec.begin(), vec.end());
@@ -70,10 +107,25 @@ std::tuple<float, float, float, std::vector<int>> CApp::compute_histogram(std::v
 	float max_abs = std::round(*max_it / step)*step;
 	std::vector<int> occurences((int)((max_abs - min_abs) / step)+1);
 
-	for (int j = 0; j < vec.size(); j++)
+	for (int j = 0; j < (int)vec.size(); j++)
 		occurences[(int)(round(vec[j] / step) - min_abs / step)] += 1;
 	
 	return std::make_tuple(min_abs, max_abs, step, occurences);
+}
+
+float CApp::compute_scale(Eigen::Vector3f& pt1, Eigen::Vector3f& pt2, Eigen::Vector3f& pt3, Eigen::Vector3f& ps1, Eigen::Vector3f& ps2, Eigen::Vector3f& ps3)
+{
+	float a, b, c, A, B, C;
+
+	a = sqrt((pt1 - pt2).transpose()*(pt1 - pt2));
+	b = sqrt((pt2 - pt3).transpose()*(pt2 - pt3));
+	c = sqrt((pt1 - pt3).transpose()*(pt1 - pt3));
+	A = sqrt((ps1 - ps2).transpose()*(ps1 - ps2));
+	B = sqrt((ps3 - ps2).transpose()*(ps3 - ps2));
+	C = sqrt((ps1 - ps3).transpose()*(ps1 - ps3));
+
+	float scale = (A / a + B / b + C / c) / 3.0;
+	return scale;
 }
 
 void CApp::ReadFeature(const char* filepath, bool target, bool initialmatching)
@@ -143,7 +195,7 @@ bool CApp::ReadPointCloud(const char* filepath)
 
 void CApp::ReadTriplets(const char* filepath)
 {
-	// read ply file and go to the section where faces are listed
+	// read txt file
 	FILE* fid = fopen(filepath, "r"); // not binary file
 
 	if (fid == NULL)
@@ -161,12 +213,41 @@ void CApp::ReadTriplets(const char* filepath)
 		fscanf(fid, "%d", &source_index);
 		fscanf(fid, "%f", &scale);
 
-		triplets_pairs_.push_back(std::make_tuple(target_index, source_index, scale));
+		pairs_.push_back(std::make_tuple(target_index, source_index, scale));
 	}
 
 	fclose(fid);
 	
 }
+
+int CApp::ReadPairs(const char* filepath)
+{
+	// read txt file
+	FILE* fid = fopen(filepath, "r"); // not binary file
+
+	if (fid == NULL)
+		std::cerr << "can't open file" << std::endl;
+
+	// get nb pairs
+	int nb_pairs;
+	fscanf(fid, "%d", &nb_pairs);
+	// get points
+	for (int v = 0; v < nb_pairs; v++) {
+
+		int target_index, source_index;
+		float scale;
+		fscanf(fid, "%d", &target_index);
+		fscanf(fid, "%d", &source_index);
+		fscanf(fid, "%f", &scale);
+
+		pairs_.push_back(std::make_tuple(target_index, source_index, scale));
+	}
+
+	fclose(fid);
+
+	return nb_pairs;
+}
+
 
 void CApp::LoadFeature(const Points& pts, const Feature& feat)
 {
@@ -512,19 +593,19 @@ void CApp::TripletConstraint()
 	std::vector<std::tuple<int, int, float> > corres_tuple;
 	int i0, i1, i2, j0, j1, j2;
 	int cnt = 0;
-	int nb_triplets = (int)triplets_pairs_.size() / 3;
+	int nb_triplets = (int)pairs_.size() / 3;
 	for (int i = 0; i < nb_triplets; i++)
 	{
 		// get scale source/target
-		float scale_coeff  = std::get<2>(triplets_pairs_[3 * i]);
+		float scale_coeff  = std::get<2>(pairs_[3 * i]);
 
 		// get source and target indices
-		j0 = std::get<0>(triplets_pairs_[3*i]);
-		i0 = std::get<1>(triplets_pairs_[3*i]);
-		j1 = std::get<0>(triplets_pairs_[3*i+1]);
-		i1 = std::get<1>(triplets_pairs_[3*i+1]);
-		j2 = std::get<0>(triplets_pairs_[3*i+2]);
-		i2 = std::get<1>(triplets_pairs_[3*i+2]);
+		j0 = std::get<0>(pairs_[3*i]);
+		i0 = std::get<1>(pairs_[3*i]);
+		j1 = std::get<0>(pairs_[3*i+1]);
+		i1 = std::get<1>(pairs_[3*i+1]);
+		j2 = std::get<0>(pairs_[3*i+2]);
+		i2 = std::get<1>(pairs_[3*i+2]);
 
 		// collect triplet of points from source fragment
 		Eigen::Vector3f pti0 = pointcloud_[0][i0];
@@ -592,6 +673,96 @@ void CApp::TripletConstraint()
 	}
 
 }
+
+
+void CApp::PairsConstraint(int k)
+{
+	float scale_ratio = tuple_scale_;
+	std::vector<float> scale_coeff_vec;
+	std::vector<std::tuple<int, int, float> > corres_tuple;
+	int i0, i1, i2, j0, j1, j2;
+	int cnt = 0;
+	int nb_ktuples = (int)pairs_.size() / k;
+	tuple_max_cnt_ = NumberOfCombinations(k, 3) * nb_ktuples;
+	int number_of_trial = 1000;
+
+	for (int i = 0; i < number_of_trial; i++)
+	{
+		// random selection of the ktuple
+		int kt = rand() % nb_ktuples;
+
+		// get source and target indices
+		std::tuple<int, int, int> three_integers = get_3_different_random_integers(k);
+
+		j0 = std::get<0>(pairs_[kt*k + std::get<0>(three_integers)]);
+		i0 = std::get<1>(pairs_[kt*k + std::get<0>(three_integers)]);
+		j1 = std::get<0>(pairs_[kt*k + std::get<1>(three_integers)]);
+		i1 = std::get<1>(pairs_[kt*k + std::get<1>(three_integers)]);
+		j2 = std::get<0>(pairs_[kt*k + std::get<2>(three_integers)]);
+		i2 = std::get<1>(pairs_[kt*k + std::get<2>(three_integers)]);
+
+		// collect triplet of points from source fragment
+		Eigen::Vector3f pti0 = pointcloud_[0][i0];
+		Eigen::Vector3f pti1 = pointcloud_[0][i1];
+		Eigen::Vector3f pti2 = pointcloud_[0][i2];
+
+		float li0 = (pti0 - pti1).norm(); // compute point to point distance
+		float li1 = (pti1 - pti2).norm();
+		float li2 = (pti2 - pti0).norm();
+
+		// collect triplet of points from target fragment
+		Eigen::Vector3f ptj0 = pointcloud_[1][j0];
+		Eigen::Vector3f ptj1 = pointcloud_[1][j1];
+		Eigen::Vector3f ptj2 = pointcloud_[1][j2];
+
+		// get scale source/target
+		//float scale_coeff = (std::get<2>(pairs_[kt*k + std::get<0>(three_integers)]) + std::get<2>(pairs_[kt*k + std::get<1>(three_integers)]) + std::get<2>(pairs_[kt*k + std::get<2>(three_integers)]))/3.0;
+		float scale_coeff = compute_scale(ptj0, ptj1, ptj2, pti0, pti1, pti2);
+
+		// tuple test
+		float lj0 = scale_coeff*(ptj0 - ptj1).norm(); // compute point to point distance
+		float lj1 = scale_coeff*(ptj1 - ptj2).norm();
+		float lj2 = scale_coeff*(ptj2 - ptj0).norm();
+
+		if ((li0 * scale_ratio < lj0) && (lj0 < li0 / scale_ratio) &&
+			(li1 * scale_ratio < lj1) && (lj1 < li1 / scale_ratio) &&
+			(li2 * scale_ratio < lj2) && (lj2 < li2 / scale_ratio)) // if distance between i-points are roughly the same as distance between j points
+		{
+			corres_tuple.push_back(std::tuple<int, int, float>(i0, j0, std::get<2>(pairs_[kt*k + std::get<0>(three_integers)]))); // keep these three points to compute T
+			corres_tuple.push_back(std::tuple<int, int, float>(i1, j1, std::get<2>(pairs_[kt*k + std::get<1>(three_integers)])));
+			corres_tuple.push_back(std::tuple<int, int, float>(i2, j2, std::get<2>(pairs_[kt*k + std::get<2>(three_integers)])));
+
+			/*scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<0>(three_integers)]));
+			scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<1>(three_integers)]));
+			scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<2>(three_integers)]));*/
+			scale_coeff_vec.push_back(scale_coeff);
+
+			cnt++;
+		}
+
+		if (cnt >= tuple_max_cnt_)  // we have at max tuple_max_cnt_*3 pairs of points to estimate T
+			break;
+	}
+
+	std::tuple<float, float, float, std::vector<int>> hist = compute_histogram(scale_coeff_vec);
+	std::vector<int>& occurences = std::get<3>(hist);
+	float min_abs = std::get<0>(hist);
+	float step = std::get<2>(hist);
+	optimal_scale_coeff_ = std::distance(occurences.begin(), std::max_element(occurences.begin(), occurences.end()))*step + min_abs;
+	//optimal_scale_coeff_ = Median(scale_coeff_vec.begin(), scale_coeff_vec.end());
+	//optimal_scale_coeff_ = Mean(scale_coeff_vec);
+
+	corres_.clear();
+	for (int i = 0; i < (int)corres_tuple.size(); ++i)
+	{
+		float scale_coeff = std::get<2>(corres_tuple[i]);
+		if (abs(scale_coeff - optimal_scale_coeff_) <= 0.2)
+			corres_.push_back(std::pair<int, int>(std::get<0>(corres_tuple[i]), std::get<1>(corres_tuple[i])));
+	}
+
+}
+
+
 
 // Normalize scale of points.
 // X' = (X-\mu)/scale
@@ -676,10 +847,10 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 	int i = 0;
 	int j = 1;
 
-	// resize pointcloud_[j] (target point cloud)
+	// rescale point cloud
 	int npcj = pointcloud_[j].size();
 	for (int cnt = 0; cnt < npcj; cnt++)
-		pointcloud_[j][cnt] = optimal_scale_coeff_*pointcloud_[j][cnt];
+		pointcloud_[j][cnt] *= optimal_scale_coeff_;
 
 	// make another copy of pointcloud_[j].
 	Points pcj_copy;
@@ -721,12 +892,12 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 			Eigen::Vector3f p, q;
 			p = pointcloud_[i][ii];
 			q = pcj_copy[jj];
-			Eigen::Vector3f rpq = p - q;
+			Eigen::Vector3f rpq = p - q;  // rpq : residual between p and q transformed
 
 			int c2 = c;
 
-			float temp = par / (rpq.dot(rpq) + par);
-			s[c2] = temp * temp;
+			float temp = par / (rpq.dot(rpq) + par);  
+			s[c2] = temp * temp; // line process lpq
 
 			J.setZero();
 			J(1) = -q(2);
