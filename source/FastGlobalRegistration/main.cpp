@@ -79,6 +79,6 @@ int main(int argc, char *argv[])
 	std::cout << "It took " << ns_triplet.count() << " nanosecond(s) to run triplet constraints" << std::endl;
 	app.WriteTrans(argv[4]);
 
-	std::cin.get();
+	//std::cin.get();
 	return 0;
 }

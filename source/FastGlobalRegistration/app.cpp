@@ -61,6 +61,19 @@ float CApp::Mean(std::vector<float>& vec)
 	return mean/(float)vec.size();
 }
 
+std::pair<float, float> CApp::Std(std::vector<float>& vec)
+{
+	float mean = Mean(vec);
+	int nb_samples = vec.size();
+	float std = 0.0;
+	for (int i = 0; i < nb_samples; i++)
+		std += (vec[i] - mean)*(vec[i] - mean);
+	std /= (float)nb_samples;
+
+	return std::make_pair(sqrt(std), mean);
+}
+
+
 int CApp::Factorial(int n)
 {
 	if (n > 1)
@@ -98,19 +111,31 @@ std::tuple<int, int, int> CApp::get_3_different_random_integers(int k)
 	return std::make_tuple(rand0, rand1, rand2);
 }
 
-std::tuple<float, float, float, std::vector<int>> CApp::compute_histogram(std::vector<float>& vec)
+std::tuple<float, float, float, std::vector<int>> CApp::compute_histogram(std::vector<float>& vec, float step)
 {
 	std::vector<float>::iterator min_it = std::min_element(vec.begin(), vec.end());
 	std::vector<float>::iterator max_it = std::max_element(vec.begin(), vec.end());
-	float step = 0.1;
-	float min_abs = std::round(*min_it / step)*step;
+	float min_abs = std::floor(*min_it / step)*step;
 	float max_abs = std::round(*max_it / step)*step;
-	std::vector<int> occurences((int)((max_abs - min_abs) / step)+1);
+	std::vector<int> occurences(round((max_abs - min_abs) / step) +1);
 
 	for (int j = 0; j < (int)vec.size(); j++)
-		occurences[(int)(round(vec[j] / step) - min_abs / step)] += 1;
+	{
+		int index = floor(vec[j] / step) - min_abs / step;
+		occurences[index] += 1;
+	}
 	
 	return std::make_tuple(min_abs, max_abs, step, occurences);
+}
+
+float CApp::compute_most_probable_scale_coeff(std::vector<int>& occurences, int nb_samples, float step, float min_abs_distribution)
+{
+	float most_probable_value = 0.0;
+	for (int i=0; i < (int)occurences.size(); i++)
+		most_probable_value +=(float) occurences[i]*(i*step + min_abs_distribution);
+	most_probable_value /= (float)nb_samples;
+	return most_probable_value;
+	
 }
 
 float CApp::compute_scale(Eigen::Vector3f& pt1, Eigen::Vector3f& pt2, Eigen::Vector3f& pt3, Eigen::Vector3f& ps1, Eigen::Vector3f& ps2, Eigen::Vector3f& ps3)
@@ -641,10 +666,10 @@ void CApp::TripletConstraint()
 			break;
 	}
 
-	std::tuple<float, float, float, std::vector<int>> hist = compute_histogram(scale_coeff_vec);
+	float step = 0.1;
+	std::tuple<float, float, float, std::vector<int>> hist = compute_histogram(scale_coeff_vec, step);
 	std::vector<int>& occurences = std::get<3>(hist);
 	float min_abs = std::get<0>(hist);
-	float step = std::get<2>(hist);
 	optimal_scale_coeff_ = std::distance(occurences.begin(), std::max_element(occurences.begin(), occurences.end()))*step + min_abs;
 	//optimal_scale_coeff_ = Median(scale_coeff_vec.begin(), scale_coeff_vec.end());
 	//optimal_scale_coeff_ = Mean(scale_coeff_vec);
@@ -720,43 +745,47 @@ void CApp::PairsConstraint(int k)
 		float scale_coeff = compute_scale(ptj0, ptj1, ptj2, pti0, pti1, pti2);
 
 		// tuple test
-		float lj0 = scale_coeff*(ptj0 - ptj1).norm(); // compute point to point distance
+		/*float lj0 = scale_coeff*(ptj0 - ptj1).norm(); // compute point to point distance
 		float lj1 = scale_coeff*(ptj1 - ptj2).norm();
 		float lj2 = scale_coeff*(ptj2 - ptj0).norm();
 
 		if ((li0 * scale_ratio < lj0) && (lj0 < li0 / scale_ratio) &&
 			(li1 * scale_ratio < lj1) && (lj1 < li1 / scale_ratio) &&
 			(li2 * scale_ratio < lj2) && (lj2 < li2 / scale_ratio)) // if distance between i-points are roughly the same as distance between j points
-		{
+		{*/
 			corres_tuple.push_back(std::tuple<int, int, float>(i0, j0, std::get<2>(pairs_[kt*k + std::get<0>(three_integers)]))); // keep these three points to compute T
 			corres_tuple.push_back(std::tuple<int, int, float>(i1, j1, std::get<2>(pairs_[kt*k + std::get<1>(three_integers)])));
 			corres_tuple.push_back(std::tuple<int, int, float>(i2, j2, std::get<2>(pairs_[kt*k + std::get<2>(three_integers)])));
 
 			/*scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<0>(three_integers)]));
 			scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<1>(three_integers)]));
-			scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<2>(three_integers)]));*/
-			scale_coeff_vec.push_back(scale_coeff);
+			scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<2>(three_integers)]));
+			scale_coeff_vec.push_back(scale_coeff);*/
 
 			cnt++;
-		}
+		//}
 
 		if (cnt >= tuple_max_cnt_)  // we have at max tuple_max_cnt_*3 pairs of points to estimate T
 			break;
 	}
 
-	std::tuple<float, float, float, std::vector<int>> hist = compute_histogram(scale_coeff_vec);
+	/*float step = 0.1;
+	std::pair<float, float> std_mean = Std(scale_coeff_vec);
+	//optimal_scale_coeff_ = std_mean.second;
+	std::tuple<float, float, float, std::vector<int>> hist = compute_histogram(scale_coeff_vec, step);
 	std::vector<int>& occurences = std::get<3>(hist);
 	float min_abs = std::get<0>(hist);
-	float step = std::get<2>(hist);
-	optimal_scale_coeff_ = std::distance(occurences.begin(), std::max_element(occurences.begin(), occurences.end()))*step + min_abs;
+	optimal_scale_coeff_ = compute_most_probable_scale_coeff(occurences, scale_coeff_vec.size(), step, min_abs);*/
+	optimal_scale_coeff_ = 1.0;
+	//optimal_scale_coeff_ = std::distance(occurences.begin(), std::max_element(occurences.begin(), occurences.end()))*step + min_abs;
 	//optimal_scale_coeff_ = Median(scale_coeff_vec.begin(), scale_coeff_vec.end());
 	//optimal_scale_coeff_ = Mean(scale_coeff_vec);
 
 	corres_.clear();
 	for (int i = 0; i < (int)corres_tuple.size(); ++i)
 	{
-		float scale_coeff = std::get<2>(corres_tuple[i]);
-		if (abs(scale_coeff - optimal_scale_coeff_) <= 0.2)
+		/*float scale_coeff = std::get<2>(corres_tuple[i]);
+		if (abs(scale_coeff - optimal_scale_coeff_) <= std_mean.first)*/
 			corres_.push_back(std::pair<int, int>(std::get<0>(corres_tuple[i]), std::get<1>(corres_tuple[i])));
 	}
 
@@ -844,6 +873,8 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 
 	par = StartScale;
 
+	//Eigen::Vector3f scales = Eigen::Vector3f(1.0, 1.0, 1.0);
+
 	int i = 0;
 	int j = 1;
 
@@ -880,6 +911,10 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 		Eigen::MatrixXd JTJ(nvariable, nvariable);
 		Eigen::MatrixXd JTr(nvariable, 1);
 		Eigen::MatrixXd J(nvariable, 1);
+		Eigen::MatrixXd JscaleTJscale(3, 3);
+		Eigen::MatrixXd JscaleTr(3, 1);
+		JscaleTJscale.setZero();
+		JscaleTr.setZero();
 		JTJ.setZero();
 		JTr.setZero();
 
@@ -896,10 +931,18 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 
 			int c2 = c;
 
+			// estimation du delta line process
 			float temp = par / (rpq.dot(rpq) + par);  
 			s[c2] = temp * temp; // line process lpq
 
+			// estimation du delta scale
+			Eigen::Vector3d Jscale = -Eigen::Vector3d(q(0), q(1), q(2));
+			JscaleTJscale += Jscale * Jscale.transpose() * s[c2];
+			JscaleTr += Jscale * r * s[c2];
+
+			// estimation du delta rot et trans
 			J.setZero();
+			//J(0) = -q(0);
 			J(1) = -q(2);
 			J(2) = q(1);
 			J(3) = -1;
@@ -909,6 +952,7 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 			r2 += r * r * s[c2];
 
 			J.setZero();
+			//J(0) = -q(1);
 			J(2) = -q(0);
 			J(0) = q(2);
 			J(4) = -1;
@@ -918,6 +962,7 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 			r2 += r * r * s[c2];
 
 			J.setZero();
+			//J(0) = -q(2);
 			J(0) = -q(1);
 			J(1) = q(0);
 			J(5) = -1;
@@ -927,21 +972,49 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 			r2 += r * r * s[c2];
 
 			r2 += (par * (1.0 - sqrt(s[c2])) * (1.0 - sqrt(s[c2])));
+
 		}
 
 		Eigen::MatrixXd result(nvariable, 1);
+		Eigen::MatrixXd result_scale(3, 1);
 		result = -JTJ.llt().solve(JTr);
+		result_scale = -JscaleTJscale.llt().solve(JscaleTr);
 
-		Eigen::Affine3d aff_mat;
+		std::cout << "result_scale : " << result_scale.transpose() << std::endl;
+
+		Eigen::Affine3d aff_mat(Eigen::Affine3d::Identity());
 		aff_mat.linear() = (Eigen::Matrix3d) Eigen::AngleAxisd(result(2), Eigen::Vector3d::UnitZ())
 			* Eigen::AngleAxisd(result(1), Eigen::Vector3d::UnitY())
-			* Eigen::AngleAxisd(result(0), Eigen::Vector3d::UnitX());
+			* Eigen::AngleAxisd(result(0), Eigen::Vector3d::UnitX())
+			*Eigen::Scaling(result_scale(0), result_scale(1), result_scale(2));
 		aff_mat.translation() = Eigen::Vector3d(result(3), result(4), result(5));
+	
+
+		/*Eigen::Matrix4d scale = Eigen::Matrix4d::Identity();
+		scale(0, 0) = result(0);
+		scale(1, 1) = result(0);
+		scale(2, 2) = result(0);
+		Eigen::Matrix4d rot = Eigen::Matrix4d::Zero();
+		rot(0, 1) = -result(3);
+		rot(1, 0) = result(3);
+		rot(0, 2) = result(2);
+		rot(2, 0) = -result(2);
+		rot(2, 1) = result(1);
+		rot(1, 2) = -result(1);
+		Eigen::Matrix4d t = Eigen::Matrix4d::Zero();
+		t(0, 3) = result(4);
+		t(1, 3) = result(5);
+		t(2, 3) = result(6);
+
+		Eigen::Matrix4f delta = (t + rot + scale).cast<float>();*/
+
 
 		Eigen::Matrix4f delta = aff_mat.matrix().cast<float>();
 
 		trans = delta * trans;
 		TransformPoints(pcj_copy, delta);
+
+		//scales += -Eigen::Vector3f(result_scale(0), q(1), q(2));
 
 	}
 

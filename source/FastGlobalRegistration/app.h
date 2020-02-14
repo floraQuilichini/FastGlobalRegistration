@@ -62,10 +62,12 @@ public:
 		tuple_max_cnt_(tuple_max_cnt),
 		initialmatching_(true){}
 	std::string extract_ext(std::string filename);
-	std::tuple<float, float, float, std::vector<int>> compute_histogram(std::vector<float>& vec);
+	std::tuple<float, float, float, std::vector<int>> compute_histogram(std::vector<float>& vec, float step);
+	float compute_most_probable_scale_coeff(std::vector<int>& occurences, int nb_samples, float step, float min_abs_distribution);
 	float compute_scale(Eigen::Vector3f& pt1, Eigen::Vector3f& pt2, Eigen::Vector3f& pt3, Eigen::Vector3f& ps1, Eigen::Vector3f& ps2, Eigen::Vector3f& ps3);
 	float Median(std::vector<float>::iterator begin, std::vector<float>::iterator end);
 	float Mean(std::vector<float>& vec);
+	std::pair<float, float> Std(std::vector<float>& vec);
 	std::tuple<int, int, int> get_3_different_random_integers(int k);
 	int Factorial(int n);
 	int NumberOfCombinations(int n, int p);
