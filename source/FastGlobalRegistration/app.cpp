@@ -867,13 +867,17 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 {
 	printf("Pairwise rigid pose optimization\n");
 
+	bool flag_update_rt_matrix_with_scale = false;
+	bool flag_update_rt_matrix = false;
+	bool flag_update_scale_matrix = false;
+	bool flag_update_ds = true;
+	bool flag_update_diwt = true;
+
 	double par;
 	int numIter = iteration_number_;
 	TransOutput_ = Eigen::Matrix4f::Identity();
 
 	par = StartScale;
-
-	//Eigen::Vector3f scales = Eigen::Vector3f(1.0, 1.0, 1.0);
 
 	int i = 0;
 	int j = 1;
@@ -899,6 +903,34 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 
 	for (int itr = 0; itr < numIter; itr++) {
 
+		if (itr % 20 == 19)
+		{
+			flag_update_rt_matrix_with_scale = true;
+			flag_update_rt_matrix = false;
+			flag_update_scale_matrix = false;
+			flag_update_diwt = true;
+			flag_update_ds = true;
+		}
+		else
+		{
+			if (itr % 5 != 4)
+			{
+				flag_update_rt_matrix_with_scale = false;
+				flag_update_rt_matrix = true;
+				flag_update_scale_matrix = false;
+				flag_update_diwt = true;
+				flag_update_ds = false;
+			}
+			else
+			{
+				flag_update_rt_matrix_with_scale = false;
+				flag_update_rt_matrix = false;
+				flag_update_scale_matrix = true;
+				flag_update_diwt = false;
+				flag_update_ds = true;
+			}
+		}
+
 		// graduated non-convexity.
 		if (decrease_mu_)
 		{
@@ -913,10 +945,12 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 		Eigen::MatrixXd J(nvariable, 1);
 		Eigen::MatrixXd JscaleTJscale(3, 3);
 		Eigen::MatrixXd JscaleTr(3, 1);
+		Eigen::MatrixXd Jscale(3, 1);
 		JscaleTJscale.setZero();
 		JscaleTr.setZero();
 		JTJ.setZero();
 		JTr.setZero();
+		Eigen::Matrix3d scale_mat = Eigen::Matrix3d::Identity();
 
 		double r;
 		double r2 = 0.0;
@@ -926,95 +960,151 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 			int jj = corres_[c].second;
 			Eigen::Vector3f p, q;
 			p = pointcloud_[i][ii];
-			q = pcj_copy[jj];
-			Eigen::Vector3f rpq = p - q;  // rpq : residual between p and q transformed
-
 			int c2 = c;
 
-			// estimation du delta line process
-			float temp = par / (rpq.dot(rpq) + par);  
-			s[c2] = temp * temp; // line process lpq
+			// estimation de la rotation et translation
+			if (flag_update_diwt)
+			{
+				q = pcj_copy[jj];
+				Eigen::Vector3f rpq = p - q;  // rpq : residual between p and q transformed
 
-			// estimation du delta scale
-			Eigen::Vector3d Jscale = -Eigen::Vector3d(q(0), q(1), q(2));
-			JscaleTJscale += Jscale * Jscale.transpose() * s[c2];
-			JscaleTr += Jscale * r * s[c2];
+				// estimation du delta line process
+				float temp = par / (rpq.dot(rpq) + par);
+				s[c2] = temp * temp; // line process lpq
 
-			// estimation du delta rot et trans
-			J.setZero();
-			//J(0) = -q(0);
-			J(1) = -q(2);
-			J(2) = q(1);
-			J(3) = -1;
-			r = rpq(0);
-			JTJ += J * J.transpose() * s[c2];
-			JTr += J * r * s[c2];
-			r2 += r * r * s[c2];
 
-			J.setZero();
-			//J(0) = -q(1);
-			J(2) = -q(0);
-			J(0) = q(2);
-			J(4) = -1;
-			r = rpq(1);
-			JTJ += J * J.transpose() * s[c2];
-			JTr += J * r * s[c2];
-			r2 += r * r * s[c2];
+				// estimation du delta rot et trans
+				J.setZero();
+				//J(0) = -q(0);
+				J(1) = -q(2);
+				J(2) = q(1);
+				J(3) = -1;
+				r = rpq(0);
+				JTJ += J * J.transpose() * s[c2];
+				JTr += J * r * s[c2];
+				r2 += r * r * s[c2];
 
-			J.setZero();
-			//J(0) = -q(2);
-			J(0) = -q(1);
-			J(1) = q(0);
-			J(5) = -1;
-			r = rpq(2);
-			JTJ += J * J.transpose() * s[c2];
-			JTr += J * r * s[c2];
-			r2 += r * r * s[c2];
+				J.setZero();
+				//J(0) = -q(1);
+				J(2) = -q(0);
+				J(0) = q(2);
+				J(4) = -1;
+				r = rpq(1);
+				JTJ += J * J.transpose() * s[c2];
+				JTr += J * r * s[c2];
+				r2 += r * r * s[c2];
 
-			r2 += (par * (1.0 - sqrt(s[c2])) * (1.0 - sqrt(s[c2])));
+				J.setZero();
+				//J(0) = -q(2);
+				J(0) = -q(1);
+				J(1) = q(0);
+				J(5) = -1;
+				r = rpq(2);
+				JTJ += J * J.transpose() * s[c2];
+				JTr += J * r * s[c2];
+				r2 += r * r * s[c2];
+
+				r2 += (par * (1.0 - sqrt(s[c2])) * (1.0 - sqrt(s[c2])));
+			}
+
+			// estimation du scale
+			if (flag_update_ds)
+			{
+				q = pcj_copy[jj];
+				Eigen::Vector3f rpq = p - q;  // rpq : residual between p and q transformed
+
+				// estimation du delta line process
+				float temp = par / (rpq.dot(rpq) + par);
+				s[c2] = temp * temp; // line process lpq
+
+				// estimation du delta scale
+				Jscale.setZero();
+				Jscale(0) = -q(0);
+				r = rpq(0);
+				JscaleTJscale += Jscale * Jscale.transpose() * s[c2];
+				JscaleTr += Jscale * r * s[c2];
+
+				Jscale.setZero();
+				Jscale(1) = -q(1);
+				r = rpq(1);
+				JscaleTJscale += Jscale * Jscale.transpose() * s[c2];
+				JscaleTr += Jscale * r * s[c2];
+
+				Jscale.setZero();
+				Jscale(2) = -q(2);
+				r = rpq(2);
+				JscaleTJscale += Jscale * Jscale.transpose() * s[c2];
+				JscaleTr += Jscale * r * s[c2];
+			}
+		}
+
+
+		if (flag_update_rt_matrix_with_scale)
+		{
+
+			Eigen::MatrixXd result(nvariable, 1);
+			result = -JTJ.llt().solve(JTr);
+			Eigen::MatrixXd result_scale(3, 1);
+			result_scale = -JscaleTJscale.llt().solve(JscaleTr);
+
+			std::cout << "result_scale : " << result_scale.transpose() << std::endl;
+			std::cout << "matrix scale intermediate : " << scale_mat*Eigen::Scaling(1.0 + result_scale(0), 1.0 + result_scale(1), 1.0 + result_scale(2)).toDenseMatrix() << std::endl;
+
+
+			scale_mat *= Eigen::Scaling(1.0 + result_scale(0), 1.0 + result_scale(1), 1.0 + result_scale(2)).toDenseMatrix();
+
+			Eigen::Affine3d aff_mat(Eigen::Affine3d::Identity());
+			aff_mat.linear() = (Eigen::Matrix3d) Eigen::AngleAxisd(result(2), Eigen::Vector3d::UnitZ())
+				* Eigen::AngleAxisd(result(1), Eigen::Vector3d::UnitY())
+				* Eigen::AngleAxisd(result(0), Eigen::Vector3d::UnitX())
+				//*Eigen::Scaling(1.0, 1.0, 1.0);
+				*scale_mat;
+			aff_mat.translation() = Eigen::Vector3d(result(3), result(4), result(5));
+
+
+			Eigen::Matrix4f delta = aff_mat.matrix().cast<float>();
+
+			trans = delta * trans;
+			TransformPoints(pcj_copy, delta);
+		}
+		else
+		{
+			if (flag_update_rt_matrix)
+			{
+				Eigen::MatrixXd result(nvariable, 1);
+				result = -JTJ.llt().solve(JTr);
+
+				Eigen::Affine3d aff_mat(Eigen::Affine3d::Identity());
+				aff_mat.linear() = (Eigen::Matrix3d) Eigen::AngleAxisd(result(2), Eigen::Vector3d::UnitZ())
+					* Eigen::AngleAxisd(result(1), Eigen::Vector3d::UnitY())
+					* Eigen::AngleAxisd(result(0), Eigen::Vector3d::UnitX());
+				aff_mat.translation() = Eigen::Vector3d(result(3), result(4), result(5));
+
+				Eigen::Matrix4f delta = aff_mat.matrix().cast<float>();
+
+				trans = delta * trans;
+				TransformPoints(pcj_copy, delta);
+
+			}
+			else
+			{
+				Eigen::MatrixXd result_scale(3, 1);
+				result_scale = -JscaleTJscale.llt().solve(JscaleTr);
+
+				std::cout << "result_scale : " << result_scale.transpose() << std::endl;
+				std::cout << "matrix scale intermediate : " << scale_mat*Eigen::Scaling(1.0 + result_scale(0), 1.0 + result_scale(1), 1.0 + result_scale(2)).toDenseMatrix() << std::endl;
+
+				Eigen::Affine3d aff_mat(Eigen::Affine3d::Identity());
+				scale_mat *= Eigen::Scaling(1.0 + result_scale(0), 1.0 + result_scale(1), 1.0 + result_scale(2)).toDenseMatrix();
+				aff_mat.linear() = scale_mat;
+				Eigen::Matrix4f delta = aff_mat.matrix().cast<float>();
+
+				trans = delta * trans;
+				TransformPoints(pcj_copy, delta);
+			}
 
 		}
 
-		Eigen::MatrixXd result(nvariable, 1);
-		Eigen::MatrixXd result_scale(3, 1);
-		result = -JTJ.llt().solve(JTr);
-		result_scale = -JscaleTJscale.llt().solve(JscaleTr);
-
-		std::cout << "result_scale : " << result_scale.transpose() << std::endl;
-
-		Eigen::Affine3d aff_mat(Eigen::Affine3d::Identity());
-		aff_mat.linear() = (Eigen::Matrix3d) Eigen::AngleAxisd(result(2), Eigen::Vector3d::UnitZ())
-			* Eigen::AngleAxisd(result(1), Eigen::Vector3d::UnitY())
-			* Eigen::AngleAxisd(result(0), Eigen::Vector3d::UnitX())
-			*Eigen::Scaling(result_scale(0), result_scale(1), result_scale(2));
-		aff_mat.translation() = Eigen::Vector3d(result(3), result(4), result(5));
-	
-
-		/*Eigen::Matrix4d scale = Eigen::Matrix4d::Identity();
-		scale(0, 0) = result(0);
-		scale(1, 1) = result(0);
-		scale(2, 2) = result(0);
-		Eigen::Matrix4d rot = Eigen::Matrix4d::Zero();
-		rot(0, 1) = -result(3);
-		rot(1, 0) = result(3);
-		rot(0, 2) = result(2);
-		rot(2, 0) = -result(2);
-		rot(2, 1) = result(1);
-		rot(1, 2) = -result(1);
-		Eigen::Matrix4d t = Eigen::Matrix4d::Zero();
-		t(0, 3) = result(4);
-		t(1, 3) = result(5);
-		t(2, 3) = result(6);
-
-		Eigen::Matrix4f delta = (t + rot + scale).cast<float>();*/
-
-
-		Eigen::Matrix4f delta = aff_mat.matrix().cast<float>();
-
-		trans = delta * trans;
-		TransformPoints(pcj_copy, delta);
-
-		//scales += -Eigen::Vector3f(result_scale(0), q(1), q(2));
 
 	}
 
