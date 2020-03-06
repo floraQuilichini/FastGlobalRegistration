@@ -67,8 +67,9 @@ std::pair<float, float> CApp::Std(std::vector<float>& vec)
 	int nb_samples = vec.size();
 	float std = 0.0;
 	for (int i = 0; i < nb_samples; i++)
-		std += (vec[i] - mean)*(vec[i] - mean);
+		std += vec[i]*vec[i];
 	std /= (float)nb_samples;
+	std -= mean*mean;
 
 	return std::make_pair(sqrt(std), mean);
 }
@@ -714,9 +715,11 @@ void CApp::PairsConstraint(int k)
 	for (int i = 0; i < number_of_trial; i++)
 	{
 		// random selection of the ktuple
+		//int kt = i;
 		int kt = rand() % nb_ktuples;
 
 		// get source and target indices
+		//std::tuple<int, int, int> three_integers(rand() % nb_ktuples, rand() % nb_ktuples, rand() % nb_ktuples);
 		std::tuple<int, int, int> three_integers = get_3_different_random_integers(k);
 
 		j0 = std::get<0>(pairs_[kt*k + std::get<0>(three_integers)]);
@@ -742,7 +745,7 @@ void CApp::PairsConstraint(int k)
 
 		// get scale source/target
 		//float scale_coeff = (std::get<2>(pairs_[kt*k + std::get<0>(three_integers)]) + std::get<2>(pairs_[kt*k + std::get<1>(three_integers)]) + std::get<2>(pairs_[kt*k + std::get<2>(three_integers)]))/3.0;
-		float scale_coeff = compute_scale(ptj0, ptj1, ptj2, pti0, pti1, pti2);
+		//float scale_coeff = compute_scale(ptj0, ptj1, ptj2, pti0, pti1, pti2);
 
 		// tuple test
 		/*float lj0 = scale_coeff*(ptj0 - ptj1).norm(); // compute point to point distance
@@ -757,10 +760,10 @@ void CApp::PairsConstraint(int k)
 			corres_tuple.push_back(std::tuple<int, int, float>(i1, j1, std::get<2>(pairs_[kt*k + std::get<1>(three_integers)])));
 			corres_tuple.push_back(std::tuple<int, int, float>(i2, j2, std::get<2>(pairs_[kt*k + std::get<2>(three_integers)])));
 
-			/*scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<0>(three_integers)]));
+			scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<0>(three_integers)]));
 			scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<1>(three_integers)]));
 			scale_coeff_vec.push_back(std::get<2>(pairs_[kt*k + std::get<2>(three_integers)]));
-			scale_coeff_vec.push_back(scale_coeff);*/
+			//scale_coeff_vec.push_back(scale_coeff);
 
 			cnt++;
 		//}
@@ -769,6 +772,7 @@ void CApp::PairsConstraint(int k)
 			break;
 	}
 
+	std::pair<float, float> std_mean = Std(scale_coeff_vec);
 	/*float step = 0.1;
 	std::pair<float, float> std_mean = Std(scale_coeff_vec);
 	//optimal_scale_coeff_ = std_mean.second;
@@ -782,10 +786,12 @@ void CApp::PairsConstraint(int k)
 	//optimal_scale_coeff_ = Mean(scale_coeff_vec);
 
 	corres_.clear();
-	for (int i = 0; i < (int)corres_tuple.size(); ++i)
+	int nb_corres_to_consider = corres_tuple.size();
+	//int nb_corres_to_consider = corres_tuple.size() / 4 + k - (corres_tuple.size() / 4) % k;
+	for (int i = 0; i < nb_corres_to_consider; ++i)
 	{
-		/*float scale_coeff = std::get<2>(corres_tuple[i]);
-		if (abs(scale_coeff - optimal_scale_coeff_) <= std_mean.first)*/
+		float scale_coeff = std::get<2>(corres_tuple[i]);
+		if (abs(scale_coeff - std_mean.second) <= std_mean.first*1.0)
 			corres_.push_back(std::pair<int, int>(std::get<0>(corres_tuple[i]), std::get<1>(corres_tuple[i])));
 	}
 
@@ -878,6 +884,7 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 	TransOutput_ = Eigen::Matrix4f::Identity();
 
 	par = StartScale;
+	//par = 1.0;
 
 	int i = 0;
 	int j = 1;
@@ -903,7 +910,7 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 
 	for (int itr = 0; itr < numIter; itr++) {
 
-		if (itr % 20 == 19)
+		if (itr % 50 > 30)
 		{
 			flag_update_rt_matrix_with_scale = true;
 			flag_update_rt_matrix = false;
@@ -913,7 +920,7 @@ double CApp::OptimizePairwise(bool decrease_mu_)
 		}
 		else
 		{
-			if (itr % 5 != 4)
+			if (itr % 50 < 20)
 			{
 				flag_update_rt_matrix_with_scale = false;
 				flag_update_rt_matrix = true;

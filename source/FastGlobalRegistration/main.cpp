@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 	app.NormalizePoints();
 	std::chrono::high_resolution_clock::time_point t0 = std::chrono::high_resolution_clock::now();
 	//app.TripletConstraint();
-	app.PairsConstraint(12);
+	app.PairsConstraint(6);
 	std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 	app.OptimizePairwise(true);
 	std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
@@ -77,6 +77,7 @@ int main(int argc, char *argv[])
 	std::cout << "It took " << ns_fgr.count() << " nanosecond(s) to run FGR" << std::endl;
 	std::chrono::nanoseconds ns_triplet = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0);
 	std::cout << "It took " << ns_triplet.count() << " nanosecond(s) to run triplet constraints" << std::endl;
+	//std::cout << "output transform : " << app.get_TransOutput() << std::endl;
 	app.WriteTrans(argv[4]);
 
 	//std::cin.get();
